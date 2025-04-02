@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>純隨機抽卡系統</title>
+    <style>
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            text-align: center;
+            margin-top: 30px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        #game-container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        #startBtn {
+            padding: 12px 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            margin: 20px 0;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        #startBtn:hover {
+            background-color: #2980b9;
+        }
+        #startBtn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        #statusInfo {
+            margin: 15px 0;
+            font-size: 1.1em;
+            color: #7f8c8d;
+            min-height: 24px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            position: relative;
+            margin: auto;
+            display: block;
+            width: auto;
+            height: auto;
+            max-width: 90%;
+            max-height: 90%;
+            top: 50%;
+            transform: translateY(-50%) scale(0.7);
+            transition: transform 0.5s ease;
+            border: 3px solid white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.6);
+        }
+        .modal.show {
+            opacity: 1;
+        }
+        .modal.show .modal-content {
+            transform: translateY(-50%) scale(1);
+        }
+        .close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            text-shadow: 0 0 5px rgba(0,0,0,0.5);
+            transition: color 0.3s;
+        }
+        .close:hover {
+            color: #e74c3c;
+        }
+        .progress-container {
+            width: 80%;
+            height: 20px;
+            background-color: #ecf0f1;
+            border-radius: 10px;
+            margin: 20px auto;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #2ecc71;
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>睇下你行到去邊？</h1>
+        <div id="statusInfo">正在初始化...</div>
+        <div class="progress-container" id="progressContainer" style="display: none;">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <button id="startBtn" disabled>開估！</button>
+        
+        <div id="imageModal" class="modal">
+            <span class="close">&times;</span>
+            <img id="modalImage" class="modal-content" alt="抽中的卡片">
+        </div>
+    </div>
+
+    <script>
+        // ======================
+        // 核心配置區
+        // ======================
+        const totalCards = 5; // 總卡牌數量
+        const cards = [];
+        
+        // 初始化所有卡牌
+        for (let i = 1; i <= totalCards; i++) {
+            cards.push({
+                path: `images/image${i}.jpg`
+            });
+        }
+        
+        const CONFIG = {
+            cards: cards
+        };
+
+        // ======================
+        // 遊戲狀態變量
+        // ======================
+        let isInitialized = false;
+
+        // DOM元素
+        const startBtn = document.getElementById('startBtn');
+        const statusInfo = document.getElementById('statusInfo');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const modalImg = document.getElementById('modalImage');
+
+        // 初始化遊戲
+        async function initGame() {
+            try {
+                startBtn.disabled = true;
+                statusInfo.textContent = '正在準備卡片...';
+                progressContainer.style.display = 'block';
+                
+                console.log('正在載入圖片:', CONFIG.cards.map(card => card.path));
+                
+                // 預加載所有圖片
+                await preloadImages(CONFIG.cards.map(card => card.path));
+                
+                statusInfo.textContent = '準備就緒！點擊按鈕開始抽卡';
+                startBtn.disabled = false;
+                isInitialized = true;
+                
+                progressContainer.style.display = 'none';
+            } catch (error) {
+                console.error('初始化失敗:', error);
+                statusInfo.textContent = '初始化失敗: ' + error.message;
+                startBtn.disabled = true;
+            }
+        }
+
+        // 圖片預加載函數 (修正後的版本)
+        function preloadImages(imageUrls) {
+            return Promise.all(imageUrls.map(url => {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.src = url;
+                    img.onload = () => resolve();
+                    img.onerror = () => {
+                        console.error('圖片載入失敗:', url);
+                        reject(new Error(`圖片載入失敗: ${url}`));
+                    };
+                });
+            }));
+        }
+
+        // 抽卡函數 - 純隨機且卡牌不會消失
+        function drawCard() {
+            if (!isInitialized) return;
+            
+            // 隨機選擇一張卡牌
+            const randomIndex = Math.floor(Math.random() * CONFIG.cards.length);
+            const selectedCard = CONFIG.cards[randomIndex];
+            
+            console.log('顯示圖片:', selectedCard.path);
+            showModal(selectedCard.path);
+            
+            statusInfo.textContent = `抽中了第 ${randomIndex + 1} 號卡片`;
+        }
+
+        // 顯示模態框函數
+        function showModal(imagePath) {
+            const modal = document.getElementById('imageModal');
+            
+            if (!modalImg) {
+                console.error('錯誤: 找不到圖片元素');
+                return;
+            }
+            
+            modalImg.src = '';
+            setTimeout(() => {
+                modalImg.src = imagePath;
+                modalImg.onerror = () => {
+                    console.error('圖片顯示失敗:', imagePath);
+                    modalImg.alt = '圖片載入失敗';
+                };
+                
+                modal.style.display = "block";
+                void modal.offsetWidth;
+                modal.classList.add('show');
+            }, 10);
+        }
+
+        // 關閉模態框
+        function closeModal() {
+            const modal = document.getElementById('imageModal');
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = "none";
+            }, 300);
+        }
+
+        // 事件監聽設定
+        startBtn.addEventListener('click', drawCard);
+        document.querySelector('.close').addEventListener('click', closeModal);
+        document.getElementById('imageModal').addEventListener('click', function(event) {
+            if (event.target === this) closeModal();
+        });
+
+        // 初始化遊戲
+        window.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>
